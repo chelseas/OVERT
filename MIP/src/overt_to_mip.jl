@@ -187,13 +187,20 @@ function max_alone_2_mip(expr::Expr, outvar::JuMP.VariableRef, overt_mip_model::
         L = u * coef + scalar
         U = l * coef + scalar
     end
-    var_mip = get_mip_var(var, overt_mip_model)
-    a = get_mip_aux_var(overt_mip_model; binary=true)
-
-    @constraint(overt_mip_model.model, outvar >= 0)
-    @constraint(overt_mip_model.model, outvar >= var_mip*coef + scalar)
-    @constraint(overt_mip_model.model, outvar <= a*U)
-    @constraint(overt_mip_model.model, outvar <= var_mip*coef + scalar - L*(1-a))
+    if U <= 0 # relu is always 0.
+        @constraint(overt_mip_model.model, outvar == 0)
+    else
+        var_mip = get_mip_var(var, overt_mip_model)
+        if L >= 0 # relu is always x.
+            @constraint(overt_mip_model.model, outvar == var_mip)
+        else # relu is not resolved.
+            a = get_mip_aux_var(overt_mip_model; binary=true)
+            @constraint(overt_mip_model.model, outvar >= 0)
+            @constraint(overt_mip_model.model, outvar >= var_mip*coef + scalar)
+            @constraint(overt_mip_model.model, outvar <= a*U)
+            @constraint(overt_mip_model.model, outvar <= var_mip*coef + scalar - L*(1-a))
+        end
+    end
 end
 
 
@@ -229,22 +236,37 @@ function max_min_2_mip(expr::Expr, outvar::JuMP.VariableRef, overt_mip_model::Ov
     L3 = min(L1, L2)
     U3 = max(U1, U2)
 
-    var1_mip = get_mip_var(var1, overt_mip_model)
-    var2_mip = get_mip_var(var2, overt_mip_model)
+    if U3 <= 0 # max(0, min(x1, x2)) = 0
+        @constraint(overt_mip_model.model, outvar == 0)
+    else
+        if U1 <= L2  # max(0, min(x1, x2)) = relu(x1)
+            new_expr = :(max(0, $(min_arg.args[2])))
+            max_alone_2_mip(new_expr, outvar, overt_mip_mode)
+        elseif U2 <= L1
+            new_exper = :(max(0, $(min_arg.args[3])))
+            max_alone_2_mip(new_expr, outvar, overt_mip_mode)
+        else
+            var1_mip = get_mip_var(var1, overt_mip_model)
+            var2_mip = get_mip_var(var2, overt_mip_model)
 
-    a  = get_mip_aux_var(overt_mip_model; binary=true)
-    b  = get_mip_aux_var(overt_mip_model; binary=true)
-    x3 = get_mip_aux_var(overt_mip_model)
+            b  = get_mip_aux_var(overt_mip_model; binary=true)
+            x3 = get_mip_aux_var(overt_mip_model)
+            @constraint(overt_mip_model.model, x3 >= coef1*var1_mip + scalar1 - (1 - b) * (U1 - L2))
+            @constraint(overt_mip_model.model, x3 >= coef2*var2_mip + scalar2 - b * (U2 - L1))
+            @constraint(overt_mip_model.model, x3 <= coef1*var1_mip + scalar1)
+            @constraint(overt_mip_model.model, x3 <= coef2*var2_mip + scalar2)
 
-    @constraint(overt_mip_model.model, x3 >= coef1*var1_mip + scalar1 - (1 - b) * (U1 - L2))
-    @constraint(overt_mip_model.model, x3 >= coef2*var2_mip + scalar2 - b * (U2 - L1))
-    @constraint(overt_mip_model.model, x3 <= coef1*var1_mip + scalar1)
-    @constraint(overt_mip_model.model, x3 <= coef2*var2_mip + scalar2)
-
-    @constraint(overt_mip_model.model, outvar >= 0)
-    @constraint(overt_mip_model.model, outvar >= x3)
-    @constraint(overt_mip_model.model, outvar <= a*U3)
-    @constraint(overt_mip_model.model, outvar <= x3 - L3*(1-a))
+            if L3 >= 0 # max(0, min(x1, x2)) = min(x1, x2)
+                @constraint(overt_mip_model.model, outvar == x3)
+            else
+                a  = get_mip_aux_var(overt_mip_model; binary=true)
+                @constraint(overt_mip_model.model, outvar >= 0)
+                @constraint(overt_mip_model.model, outvar >= x3)
+                @constraint(overt_mip_model.model, outvar <= a*U3)
+                @constraint(overt_mip_model.model, outvar <= x3 - L3*(1-a))
+            end
+        end
+    end
 end
 
 function mip_summary(model)
