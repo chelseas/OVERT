@@ -18,19 +18,28 @@ query = OvertQuery(
 input_set = Hyperrectangle(low=[9.5, -4.5, 2.1, 1.5], high=[9.55, -4.45, 2.11, 1.51])
 #all_sets,  all_oA, all_oA_vars = many_timestep_concretization(query, input_set)
 
-all_sets_tot = []
-for i = 1:10
-	all_sets, all_sets_symbolic = symbolic_reachability(query, input_set)
-	input_set = all_sets_symbolic
-	vcat(all_sets_tot, all_sets)
-end
-# all_sets_2, all_sets_symbolic = symbolic_reachability(query, input_set)
-#
-# input_set = all_sets_symbolic
-# all_sets_3, all_sets_symbolic = symbolic_reachability(query, input_set)
-#
-# input_set = all_sets_symbolic
-# all_sets_4, all_sets_symbolic = symbolic_reachability(query, input_set)
+all_sets_1, all_sets_symbolic = symbolic_reachability(query, input_set)
+
+input_set = all_sets_symbolic
+all_sets_2, all_sets_symbolic = symbolic_reachability(query, input_set)
+
+input_set = all_sets_symbolic
+all_sets_3, all_sets_symbolic = symbolic_reachability(query, input_set)
+
+input_set = all_sets_symbolic
+all_sets_4, all_sets_symbolic = symbolic_reachability(query, input_set)
+
+input_set = all_sets_symbolic
+all_sets_5, all_sets_symbolic = symbolic_reachability(query, input_set)
+
+input_set = all_sets_symbolic
+all_sets_6, all_sets_symbolic = symbolic_reachability(query, input_set)
+
+input_set = all_sets_symbolic
+all_sets_7, all_sets_symbolic = symbolic_reachability(query, input_set)
+
+input_set = all_sets_symbolic
+all_sets_8, all_sets_symbolic = symbolic_reachability(query, input_set)
 
 # query.ntime= 50
 # input_set = Hyperrectangle(low=[9.5, -4.5, 2.1, 1.5], high=[9.55, -4.45, 2.11, 1.51])
