@@ -28,8 +28,11 @@ function add_controller_constraints(model, network_nnet_address, input_set, inpu
     network = read_nnet(network_nnet_address, last_layer_activation=last_layer_activation)
     neurons = init_neurons(model, network)
     deltas = init_deltas(model, network)
-    bounds = get_bounds(network, input_set)
+    # bounds = get_bounds(network, input_set)
+	bounds = get_bounds_lp(network, input_set)
     encode_network!(model, network, neurons, deltas, bounds, BoundedMixedIntegerLP())
+	# bounds = [bounds]
+	# bounds = encode_network_lp!(model, network, neurons, deltas, input_set, BoundedMixedIntegerLP())
     @constraint(model, input_vars .== neurons[1])  # set inputvars
     @constraint(model, output_vars .== neurons[end])  # set outputvars
     return bounds[end]
@@ -37,7 +40,8 @@ end
 
 function find_controller_bound(network_file, input_set, last_layer_activation)
     network = read_nnet(network_file; last_layer_activation=last_layer_activation)
-    bounds = get_bounds(network, input_set)
+    #bounds = get_bounds(network, input_set)
+	bounds = get_bounds_lp(network, input_set)
     return bounds[end]
 end
 

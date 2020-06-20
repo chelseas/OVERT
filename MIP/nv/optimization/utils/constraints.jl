@@ -218,6 +218,48 @@ function encode_layer!(::BoundedMixedIntegerLP,
     end
 end
 
+"""
+reading network by using mip-bound
+"""
+function encode_network_lp!(model::Model,
+                         network::Network,
+                         zs::Vector{Vector{VariableRef}},
+                         δs::Vector,
+                         input_bounds::Hyperrectangle,
+                         encoding::AbstractLinearProgram)
+    bounds = Array{Hyperrectangle}(undef, 0)
+    for (i, layer) in enumerate(network.layers)
+        if i == 1
+            push!(bounds, input_bounds)
+            for j = 1:length(input_bounds.radius)
+                l = input_bounds.center[j] - input_bounds.radius[j]
+                u = input_bounds.center[j] + input_bounds.radius[j]
+                @constraint(model, zs[i][j] ≤ u)
+                @constraint(model, zs[i][j] ≥ l)
+            end
+        else
+            mins = Array{Float64}(undef, 0)
+            maxs = Array{Float64}(undef, 0)
+            for v in zs[i]
+                @objective(model, Min, v)
+                JuMP.optimize!(model)
+                @assert termination_status(model) == MOI.OPTIMAL
+        		push!(mins, objective_value(model))
+
+                @objective(model, Max, v)
+                JuMP.optimize!(model)
+                @assert termination_status(model) == MOI.OPTIMAL
+        		push!(maxs, objective_value(model))
+            end
+            push!(bounds, Hyperrectangle(low=mins, high=maxs))
+        end
+        encode_layer!(encoding, model, layer, zs[i], zs[i+1], δs[i], bounds[i])
+    end
+    last_layer_bound = forward_layer(MaxSens(0.0, true), network.layers[end], bounds[end])
+    push!(bounds, last_layer_bound)
+    return bounds # only matters for SlackLP
+end
+
 
 #=
 Add input/output constraints to model

@@ -283,6 +283,33 @@ function get_bounds(nnet::Network, input::Hyperrectangle, act::Bool = true) # NO
 end
 get_bounds(problem::Problem) = get_bounds(problem.network, problem.input)
 
+
+"""
+    get_bounds_lp(problem::Problem)
+    get_bounds_lp(nnet::Network, input::Hyperrectangle)
+
+This function use lp relaxation to compute node-wise bounds given a input set.
+
+Return:
+- `Vector{Hyperrectangle}`: bounds for all nodes **after** activation. `bounds[1]` is the input set.
+"""
+function get_bounds_lp(nnet::Network, input::Hyperrectangle, act::Bool = true) # NOTE there is another function by the same name in convDual. Should reconsider dispatch
+    if act
+        model = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0))
+        neurons = init_neurons(model, nnet)
+        deltas = init_deltas(model, nnet)
+        bounds = encode_network_lp!(model, nnet, neurons, deltas, input, BoundedMixedIntegerLP())
+        return bounds
+    else
+       error("before activation bounds not supported yet.")
+    end
+end
+get_bounds_lp(problem::Problem) = get_bounds_lp(problem.network, problem.input)
+
+
+
+
+
 """
     affine_map(layer, input::AbstractPolytope)
 
