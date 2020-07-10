@@ -371,6 +371,167 @@ end
 
 """
 ----------------------------------------------
+symbolic queries, reachability with splitting.
+----------------------------------------------
+"""
+
+function split_hyperrectangle(input_set::Hyperrectangle, splits_idx)
+	"""
+ 	This function splits the input_set into halves based on indices given in splits_idx
+ 	- input_set: Hyperrectangle for the initial set of variables.
+	- splits_idx: indeces for splitting.
+    outputs:
+    - input_sets_splitted: an array of hyperrectangles which are splits of
+	the original input_set.
+ 	"""
+	if length(splits_idx) == 0
+		return input_set
+	else
+		input_sets_splitted = []
+		idx = splits_idx[1]
+		center = input_set.center
+		radius = input_set.radius
+
+		left_center = copy(center)
+		left_center[idx] -= radius[idx] / 2
+		left_radius = copy(radius)
+		left_radius[idx] /= 2
+		left = Hyperrectangle(left_center, left_radius)
+
+		right_center = copy(center)
+		right_center[idx] += radius[idx] / 2
+		right_radius = copy(radius)
+		right_radius[idx] /= 2
+		right = Hyperrectangle(right_center, right_radius)
+
+		push!(input_sets_splitted, split_hyperrectangle(left, splits_idx[2:end]))
+
+		push!(input_sets_splitted, split_hyperrectangle(right, splits_idx[2:end]))
+	end
+	input_sets_splitted = vcat(input_sets_splitted...)
+	return input_sets_splitted
+end
+
+function symbolic_reachability_with_splitting(query::OvertQuery, input_sets::Array{Any, 1}, splits_idx::Array{Int, 1})
+	all_concrete_sets = []
+	all_symbolic_sets = []
+	for input_set in input_sets
+		concrete_sets, symbolic_set = symbolic_reachability_with_splitting(query, input_set, splits_idx)
+		push!(all_concrete_sets, concrete_sets)
+		push!(all_symbolic_sets, symbolic_set)
+	end
+	return all_concrete_sets, all_symbolic_sets
+end
+
+function symbolic_reachability_with_splitting(query::OvertQuery, input_set::Hyperrectangle, splits_idx::Array{Int, 1})
+	"""
+ 	This function splits the input_set into halves based on indices given in splits_idx
+		and then computes the reachable set after n timestep symbolically
+    inputs:
+    - query: OvertQuery
+ 	- input_set: Hyperrectangle for the initial set of variables.
+	- splits_idx: indeces for splitting.
+    outputs:
+    - all_sets: an array of hyperrectangle of all reachable sets, starting from the init set
+                computed with concretization
+    - all_sets_symbolic: a hyperrectangle for the reachable set at t=n, computed symbolically.
+ 	"""
+	input_sets_splitted = split_hyperrectangle(input_set, splits_idx)
+	all_concrete_sets = []
+	all_symbolic_sets = []
+	for this_set in input_sets_splitted
+		concrete_sets, symbolic_set = symbolic_reachability(query, this_set)
+		push!(all_concrete_sets, concrete_sets)
+		push!(all_symbolic_sets, symbolic_set)
+	end
+	return all_concrete_sets, all_symbolic_sets
+end
+
+function symbolic_reachability_with_concretization(query::OvertQuery,
+	input_set::Hyperrectangle, concretize_every::Union{Int, Array{Int, 1}})
+   """
+	This function computes the reachable set after n timestep symbolically by
+		concretizing after every concretize_every timesteps.
+
+   inputs:
+   - query: OvertQuery
+   - input_set: Hyperrectangle for the initial set of variables.
+   - concretize_every: concretization period.
+   outputs:
+   - all_sets: an array of hyperrectangle of all reachable sets, starting from the init set
+               computed with concretization
+   - all_sets_symbolic: a hyperrectangle for the reachable set at t=n, computed symbolically.
+	"""
+	ntime = query.ntime
+	if isa(concretize_every, Int)
+		@assert ntime % concretize_every == 0
+		n_loops = Int(query.ntime / concretize_every)
+		concretize_every = [concretize_every for i in 1:n_loops]
+	end
+
+
+	all_concrete_sets = []
+	all_symbolic_sets = []
+	this_set = copy(input_set)
+	for n in concretize_every
+		query.ntime = n
+		concrete_sets, symbolic_set = symbolic_reachability(query, this_set)
+		push!(all_concrete_sets, concrete_sets)
+		push!(all_symbolic_sets, symbolic_set)
+		this_set = copy(symbolic_set)
+	end
+
+	query.ntime = ntime
+	return all_concrete_sets, all_symbolic_sets
+end
+
+function symbolic_reachability_with_concretization_with_splitting(query::OvertQuery,
+	input_sets::Array{Any, 1},
+	concretize_every::Union{Int, Array{Int, 1}},
+	split_idx::Array{Int, 1})
+
+	all_concrete_sets = []
+	all_symbolic_sets = []
+	for input_set in input_sets
+		concrete_set, symbolic_set = symbolic_reachability_with_concretization_with_splitting(query, input_set, concretize_every_split_idx)
+		push!(all_concrete_sets, concrete_sets)
+		push!(all_symbolic_sets, symbolic_set)
+	end
+	return all_concrete_sets, all_symbolic_sets
+end
+
+function symbolic_reachability_with_concretization_with_splitting(query::OvertQuery,
+	input_set::Hyperrectangle,
+	concretize_every::Union{Int, Array{Int, 1}},
+	split_idx::Array{Int, 1})
+
+	ntime = query.ntime
+	if isa(concretize_every, Int)
+		@assert ntime % concretize_every == 0
+		n_loops = Int(query.ntime / concretize_every)
+		concretize_every = [concretize_every for i in 1:n_loops]
+	end
+
+	all_concrete_sets = []
+	all_symbolic_sets = []
+	this_set = copy(input_set)
+	idx = 0
+	for n in concretize_every
+		idx += 1
+		println("concretize step: $idx")
+		query.ntime = n
+		concrete_sets, symbolic_set = symbolic_reachability_with_splitting(query, this_set, split_idx)
+		push!(all_concrete_sets, concrete_sets)
+		push!(all_symbolic_sets, symbolic_set)
+		this_set = copy(symbolic_set)
+	end
+
+	query.ntime = ntime
+	return all_concrete_sets, all_symbolic_sets
+end
+
+"""
+----------------------------------------------
 symbolic queries, satisfiability (feasibility).
 ----------------------------------------------
 """
@@ -411,16 +572,106 @@ function add_feasibility_constraints!(mip_model, query, oA_vars, target_set)
 		dv_mip = mip_model.vars_dict[dv]
 		next_v_mip = v_mip + dt * dv_mip
 		push!(timestep_nplus1_vars, next_v_mip)
-		v_min = target_set.center[i] - target_set.radius[i]
-		v_max = target_set.center[i] + target_set.radius[i]
-		@constraint(mip_model.model, next_v_mip >= v_min)
-		@constraint(mip_model.model, next_v_mip <= v_max)
+		v_min = low(target_set)[i] #target_set.center[i] - target_set.radius[i]
+		v_max = high(target_set)[i] #target_set.center[i] + target_set.radius[i]
+		if isfinite(v_min)
+			@constraint(mip_model.model, next_v_mip >= v_min)
+		end
+		if isfinite(v_max)
+			@constraint(mip_model.model, next_v_mip <= v_max)
+		end
 	end
 	return timestep_nplus1_vars
 end
 
 
-function symbolic_satisfiability_nth(query::OvertQuery, input_set::Hyperrectangle, target_set::Hyperrectangle)
+# function symbolic_satisfiability_nth(query::OvertQuery, input_set::Hyperrectangle,
+# 	target_set::Hyperrectangle)
+# 	"""
+# 	This function computes the reachable set after n timestep symbolically.
+# 	inputs:
+# 	- query: OvertQuery
+# 	- input_set: Hyperrectangle for the initial set of states.
+# 	- target_set: Hyperrectangle for the target set of states.
+# 	outputs:
+# 	- status: status of query which can be sat, unsat or error,
+# 	- vals: if sat, returns the counter example at timestep n+1. else returns empty dictionary.
+# 	- stats: if sat, returns the counter example at timestep 1 to n. else returns empty dictionary.
+# 	"""
+# 	vals, stats = Dict(), Dict()
+#
+# 	# setup all overt cosntraints
+#
+# 	mip_model, all_sets, all_oA_vars = setup_mip_with_overt_constraints(query, input_set)
+#
+# 	# read neural network and add controller constraints
+# 	add_controllers_constraints!(mip_model, query, all_sets)
+#
+# 	# mip summary of constaints
+#     mip_summary(mip_model.model)
+#
+# 	# connect outputs of timestep i to inputs of timestep i-1
+# 	match_io!(mip_model, query, all_oA_vars)
+#
+# 	# add feasibility constraints that n+1 timestep intersects target set.
+# 	timestep_nplus1_vars = add_feasibility_constraints!(mip_model, query, all_oA_vars[end], target_set)
+#
+# 	JuMP.optimize!(mip_model.model)
+# 	if termination_status(mip_model.model) == MathOptInterface.OPTIMAL
+# 		# optimal
+# 		status = "sat"
+# 		vals = value.(timestep_nplus1_vars)
+# 		stats = Dict()
+# 		for i = 1:query.ntime
+# 			input_vars_now = [Meta.parse("$(v)_$i") for v in query.problem.input_vars]
+# 			tmp_dict = Dict((v, value(mip_model.vars_dict[v])) for v in input_vars_now)
+# 			stats = merge(stats, tmp_dict)
+# 		end
+# 	elseif termination_status(mip_model.model) == MathOptInterface.INFEASIBLE
+# 		# infeasible
+# 		status = "unsat"
+# 	else
+#   		status = "error"
+# 	end
+# 	return status, vals, stats
+# end
+#
+#
+# function symbolic_satisfiability(query::OvertQuery, input_set::Hyperrectangle, target_set::Hyperrectangle; unsat_problem::Bool=false)
+# 	"""
+# 	Checks whether a property P is satisfied at timesteps 1 to n symbolically.
+# 	inputs:
+# 	- query: OvertQuery
+# 	- input_set: Hyperrectangle for the initial set of variables.
+# 	- target_set: Hyperrectangle for the targe set of variables.
+# 	- unsat_problem: if true, it solves an unsatisfiability problem. i.e. the first
+# 	                timestep at which state does not include in target set.
+# 	outputs:
+# 	- status: status of query which can be sat, unsat or error,
+# 	- vals: if sat, returns the counter example at timestep n+1. else returns empty dictionary.
+# 	- stats: if sat, returns the counter example at timestep 1 to n. else returns empty dictionary.
+# 	"""
+# 	n = query.ntime
+# 	SATus, vals, stats = "", Dict(), Dict() # "init" values...
+# 	problem_type = unsat_problem ? "unsat" : "sat"
+# 	for i = 1:n
+# 		println("checking timestep ", i)
+# 		query.ntime = i
+# 		SATus, vals, stats = symbolic_satisfiability_nth(query, input_set, target_set)
+# 		if SATus == problem_type
+# 			println("Property violated at timestep $i")
+# 			return SATus, vals, stats
+# 	 	elseif SATus == "error"
+# 		 	throw("some error occured at timestep $i")
+# 		end
+#    end
+#    println("Property holds for $n timesteps.")
+#    return SATus, vals, stats
+# end
+
+
+function symbolic_satisfiability_nth(query::OvertQuery, input_set::Hyperrectangle,
+	target_set, all_sets, all_oA, all_oA_vars)
 	"""
 	This function computes the reachable set after n timestep symbolically.
 	inputs:
@@ -433,9 +684,12 @@ function symbolic_satisfiability_nth(query::OvertQuery, input_set::Hyperrectangl
 	- stats: if sat, returns the counter example at timestep 1 to n. else returns empty dictionary.
 	"""
 	vals, stats = Dict(), Dict()
+	ntime = query.ntime
+	@assert ntime == length(all_oA)
 
-	# setup all overt cosntraints
-	mip_model, all_sets, all_oA_vars = setup_mip_with_overt_constraints(query, input_set)
+	# combine overt cosntraints
+	oA_tot = add_overapproximate(all_oA)
+	mip_model = OvertMIP(oA_tot)
 
 	# read neural network and add controller constraints
 	add_controllers_constraints!(mip_model, query, all_sets)
@@ -470,7 +724,43 @@ function symbolic_satisfiability_nth(query::OvertQuery, input_set::Hyperrectangl
 end
 
 
-function symbolic_satisfiability(query::OvertQuery, input_set::Hyperrectangle, target_set::Hyperrectangle; unsat_problem::Bool=false)
+# function symbolic_satisfiability(query::OvertQuery, input_set::Hyperrectangle, target_set::Hyperrectangle; unsat_problem::Bool=false)
+# 	"""
+# 	Checks whether a property P is satisfied at timesteps 1 to n symbolically.
+# 	inputs:
+# 	- query: OvertQuery
+# 	- input_set: Hyperrectangle for the initial set of variables.
+# 	- target_set: Hyperrectangle for the targe set of variables.
+# 	- unsat_problem: if true, it solves an unsatisfiability problem. i.e. the first
+# 	                timestep at which state does not include in target set.
+# 	outputs:
+# 	- status: status of query which can be sat, unsat or error,
+# 	- vals: if sat, returns the counter example at timestep n+1. else returns empty dictionary.
+# 	- stats: if sat, returns the counter example at timestep 1 to n. else returns empty dictionary.
+# 	"""
+# 	n = query.ntime
+# 	SATus, vals, stats = "", Dict(), Dict() # "init" values...
+# 	problem_type = unsat_problem ? "unsat" : "sat"
+#
+# 	all_sets,  all_oA, all_oA_vars = many_timestep_concretization(query, input_set; timed=true)
+#
+# 	for i = 1:n
+# 		println("checking timestep ", i)
+# 		query.ntime = i
+# 		SATus, vals, stats = symbolic_satisfiability_nth(query, input_set, target_set, all_sets[1:i], all_oA[1:i], all_oA_vars[1:i])
+# 		if SATus == problem_type
+# 			println("Property violated at timestep $i")
+# 			return SATus, vals, stats
+# 	 	elseif SATus == "error"
+# 		 	throw("some error occured at timestep $i")
+# 		end
+#    end
+#    println("Property holds for $n timesteps.")
+#    return SATus, vals, stats
+# end
+
+
+function symbolic_satisfiability(query::OvertQuery, input_set::Hyperrectangle, target_set; unsat_problem::Bool=false, after_n::Int=0)
 	"""
 	Checks whether a property P is satisfied at timesteps 1 to n symbolically.
 	inputs:
@@ -479,18 +769,38 @@ function symbolic_satisfiability(query::OvertQuery, input_set::Hyperrectangle, t
 	- target_set: Hyperrectangle for the targe set of variables.
 	- unsat_problem: if true, it solves an unsatisfiability problem. i.e. the first
 	                timestep at which state does not include in target set.
+    - after_n: satisfiability is checked for n > after_n. n here is the time step number.
+	           default value = 0. meaning that we start from begining.
 	outputs:
 	- status: status of query which can be sat, unsat or error,
 	- vals: if sat, returns the counter example at timestep n+1. else returns empty dictionary.
 	- stats: if sat, returns the counter example at timestep 1 to n. else returns empty dictionary.
+
 	"""
 	n = query.ntime
 	SATus, vals, stats = "", Dict(), Dict() # "init" values...
 	problem_type = unsat_problem ? "unsat" : "sat"
+
+	input_set_tmp = copy(input_set)
+	all_sets = [input_set]
+	all_oA = Array{OverApproximation}(undef, 0)
+	all_oA_vars = []
+
 	for i = 1:n
 		println("checking timestep ", i)
+		output_set, oA, oA_vars = one_timestep_concretization(query, input_set_tmp; t_idx=i)
+		input_set_tmp = output_set
+		push!(all_sets, output_set)
+		push!(all_oA, oA)
+		push!(all_oA_vars, oA_vars)
+
+		if i <= after_n
+			println("not yet in the timestep of interest")
+			continue
+		end
+
 		query.ntime = i
-		SATus, vals, stats = symbolic_satisfiability_nth(query, input_set, target_set)
+		SATus, vals, stats = symbolic_satisfiability_nth(query, input_set, target_set, all_sets, all_oA, all_oA_vars)
 		if SATus == problem_type
 			println("Property violated at timestep $i")
 			return SATus, vals, stats
@@ -689,6 +999,25 @@ end
 monte carlo simulation
 ----------------------------------------------
 """
+function monte_carlo_one_simulate(query, x0)
+	dynamics_func = query.problem.true_dynamics
+	controller_nnet_address  = query.network_file
+	last_layer_activation = query.last_layer_activation
+	ntime = query.ntime
+	dt = query.dt
+	controller = read_nnet(controller_nnet_address, last_layer_activation=last_layer_activation)
+	xvec = zeros(ntime+1, length(x0))
+	xvec[1, :] = x0
+	x = x0
+	for j = 1:ntime
+		u = compute_output(controller, x)
+		dx = dynamics_func(x, u)
+		x = x + dx*dt
+		xvec[j+1, :] = x
+	end
+	return xvec
+end
+
 
 function monte_carlo_simulate(query::OvertQuery, input_set::Hyperrectangle; n_sim::Int64=1000000)
 	"""
@@ -792,20 +1121,18 @@ function plot_mc_trajectories(data0, data; fig=nothing, idx=[1,2], n_traj = 100,
 end
 
 
-function plot_output_sets_pgfplot(output_sets; idx=[1,2], fig=nothing, linewidth=3,
+function plot_output_sets_pgfplot(output_sets; idx=[1,2], fig=nothing, linewidth=:thick,
     linecolor=:black, linestyle=:solid, fillalpha=0, fill=:red, labels=nothing)
 
-    if isnothing(fig)
-		fig = PGFPlots.Axis(style="width=10cm, height=10cm")
+	if isnothing(labels)
+		labels = ["\$x_$(idx[1])\$", "\$x_$(idx[2])\$"]
 	end
 
-	if !isnothing(labels)
-		fig.xlabel = labels[1]
-		fig.ylabel = labels[2]
+	if isnothing(fig)
+		fig = PGFPlots.Axis(style="width=10cm, height=10cm", xlabel=labels[1], ylabel=labels[2])
 	end
 
-
-	line_style = "$linestyle, $linecolor, very thick, mark=none"
+	line_style = "$linestyle, $linecolor, $linewidth, mark=none"
     for s in output_sets
 		s1, s2 = s.center[idx[1]], s.center[idx[2]]
 		r1, r2 = s.radius[idx[1]], s.radius[idx[2]]
@@ -820,14 +1147,18 @@ end
 
 function plot_output_hist_pgfplot(data, ntime; fig=nothing, idx=[1,2],
 	     inner_points=false, labels=nothing)
-    if isnothing(fig)
-		fig = PGFPlots.Axis(style="width=10cm, height=10cm")
+    if isnothing(labels)
+		labels = ["\$x_$(idx[1])\$", "\$x_$(idx[2])\$"]
+	end
+
+	if isnothing(fig)
+		fig = PGFPlots.Axis(style="width=10cm, height=10cm", xlabel=labels[1], ylabel=labels[2])
 	end
 
     # x = data[:, ntime, idx[1]]
     # y = data[:, ntime, idx[2]]
 	# push!(fig, PGFPlots.Plots.Histogram2(x, y, density=true,
-	#                                    colormap=PGFPlots.ColorMaps.Named("Jet")))
+	#                                    colormap=PGFPlots.ColorMaps.Named("Jet"))
 
 	points = data[:, ntime, idx]
 	if inner_points
@@ -838,14 +1169,48 @@ function plot_output_hist_pgfplot(data, ntime; fig=nothing, idx=[1,2],
 	end
 
 	border_idx = chull(points).vertices
-	p = PGFPlots.Plots.Linear(points[border_idx, 1], points[border_idx, 2],
-	                         style="solid, orange, line width=3pt, mark=none")
+	p = PGFPlots.Plots.Linear(points[border_idx, 1], points[border_idx, 2], style="solid, orange, line width=3pt, mark=none")
 	push!(fig, p)
 
-	if !isnothing(labels)
-		fig.xlabel = labels[1]
-		fig.ylabel = labels[2]
-	end
+
 
     return fig
+end
+
+function plot_satisfiability_pgfplot(stats, vals, query; fig=nothing, idx=[1,2], labels=nothing)
+	if isnothing(labels)
+		labels = ["\$x_$(idx[1])\$", "\$x_$(idx[2])\$"]
+	end
+	if isnothing(fig)
+		fig = PGFPlots.Axis(style="width=10cm, height=10cm", xlabel=labels[1], ylabel=labels[2])
+	end
+
+	data_sat_x = Array{Float64, 1}(undef, 0)
+	data_sat_y = Array{Float64, 1}(undef, 0)
+    i = 1
+	while true
+		vx = "x$(idx[1])_$i"
+		vx = Meta.parse(vx)
+		if vx ∉ keys(stats)
+			break
+		end
+		push!(data_sat_x, stats[vx])
+
+		vy = "x$(idx[2])_$i"
+		vy = Meta.parse(vy)
+		push!(data_sat_y, stats[vy])
+		i += 1
+	end
+	push!(data_sat_x, vals[idx[1]])
+	push!(data_sat_y, vals[idx[2]])
+
+	n_dim = length(query.problem.input_vars)
+	x0 = [stats[Meta.parse("x$(idx[i])_1")] for i = 1:n_dim]
+	data_mc = monte_carlo_one_simulate(query, x0)
+
+	pp = PGFPlots.Plots.Linear(data_sat_x, data_sat_y, style="mark=none, orange, dashed, very thick")
+	push!(fig, pp)
+	pp = PGFPlots.Plots.Linear(data_mc[:, idx[1]], data_mc[:, idx[2]], style="blue")
+	push!(fig, pp)
+	return fig
 end
