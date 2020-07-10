@@ -137,7 +137,7 @@ function rewrite_division_by_const(expr::Expr)
     end
 end
 
-function find_UB(func, a, b, N; lb=false, digits=nothing, plot=false, existing_plot=nothing, ϵ=0)
+function find_UB(func, a, b, N; lb=false, digits=nothing, plot=false, existing_plot=nothing, ϵ=0, d2f_zeros=nothing)
 
     """
     This function finds the piecewise linear upperbound (lowerbound) of
@@ -149,7 +149,7 @@ function find_UB(func, a, b, N; lb=false, digits=nothing, plot=false, existing_p
     as well the lambda function form (UB_eval).
     """
 
-    UB = bound(func, a, b, N; lowerbound=lb, plot=plot, existing_plot=existing_plot)
+    UB = bound(func, a, b, N; lowerbound=lb, plot=plot, existing_plot=existing_plot, d2f_zeros=d2f_zeros)
     UB_points = unique(sort(to_pairs(UB), by = x -> x[1]))
     #println("points: ", UB_points)
     if abs(ϵ) > 0

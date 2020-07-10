@@ -344,30 +344,40 @@ function bound_1arg_function(e::Expr, arg::Symbol, bound::OverApproximation; plo
     @debug "bound effectively unary" e arg bound
     fun = SymEngine.lambdify(e, [arg])
     lb, ub, npoint = bound.ranges[arg][1], bound.ranges[arg][2], bound.N
-    return bound_unary_function(fun, e, arg, lb, ub, npoint, bound, plotflag=plotflag)
+
+    if e.args[1] == :tanh
+        if lb < 0 && ub > 0
+            d2f_zeros = [0.]
+        else
+            d2f_zeros = []
+        end
+    else
+        d2f_zeros = nothing
+    end
+    return bound_unary_function(fun, e, arg, lb, ub, npoint, bound; plotflag=plotflag, d2f_zeros=d2f_zeros)
 end
 
 """
     bound_unary_function(f::Symbol, x_bound::OverflowError; plotflag=true)
 Bound one argument unary functions like sin(x). Create upper and lower bounds of function f(x)
 """
-function bound_unary_function(f::Symbol, x_bound::OverApproximation; plotflag=plotflag)
+function bound_unary_function(f::Symbol, x_bound::OverApproximation; plotflag=plotflag, d2f_zeros=nothing)
     @debug "bound true unary" f x_bound.output
     fun = eval(:($f))
     lb, ub, npoint = x_bound.output_range[1], x_bound.output_range[2], x_bound.N
     f_x_expr = :($(f)($(x_bound.output)))
-    return bound_unary_function(fun, f_x_expr, x_bound.output, lb, ub, npoint, x_bound, plotflag=plotflag)
+    return bound_unary_function(fun, f_x_expr, x_bound.output, lb, ub, npoint, x_bound; plotflag=plotflag, d2f_zeros=d2f_zeros)
 end
 
 """
     bound_unary_function(f::Function, lb, ub, npoint, bound)
 Bound one argument functions like sin(x) or x -> x^2 or x -> 1/x. Create upper and lower bounds of function f(x)
 """
-function bound_unary_function(fun::Function, f_x_expr, x, lb, ub, npoint, bound; plotflag=plotflag)
+function bound_unary_function(fun::Function, f_x_expr, x, lb, ub, npoint, bound; plotflag=plotflag, d2f_zeros=nothing)
     p = plotflag ? plot(0,0) : nothing
-    UBpoints, UBfunc_sym, UBfunc_eval = find_UB(fun, lb, ub, npoint; lb=false, plot=plotflag, existing_plot=p, ϵ= bound.ϵ)
+    UBpoints, UBfunc_sym, UBfunc_eval = find_UB(fun, lb, ub, npoint; lb=false, plot=plotflag, existing_plot=p, ϵ= bound.ϵ, d2f_zeros=d2f_zeros)
     fUBrange = [find_1d_range(UBpoints)...]
-    LBpoints, LBfunc_sym, LBfunc_eval = find_UB(fun, lb, ub, npoint; lb=true, plot=plotflag, existing_plot=p, ϵ= -bound.ϵ)
+    LBpoints, LBfunc_sym, LBfunc_eval = find_UB(fun, lb, ub, npoint; lb=true, plot=plotflag, existing_plot=p, ϵ= -bound.ϵ, d2f_zeros=d2f_zeros)
     fLBrange = [find_1d_range(LBpoints)...]
     ## create new vars for these expr, equate to exprs, and add them to equality list
     # e.g. y = fUB(x), z = fLB(x)
