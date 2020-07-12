@@ -260,15 +260,15 @@ function interval_map(W::Matrix{N}, l::AbstractVecOrMat, u::AbstractVecOrMat) wh
 end
 
 """
-    get_bounds(problem::Problem)
-    get_bounds(nnet::Network, input::Hyperrectangle)
+    get_bounds_interval(problem::Problem)
+    get_bounds_interval(nnet::Network, input::Hyperrectangle)
 
 This function calls maxSens to compute node-wise bounds given a input set.
 
 Return:
 - `Vector{Hyperrectangle}`: bounds for all nodes **after** activation. `bounds[1]` is the input set.
 """
-function get_bounds(nnet::Network, input::Hyperrectangle, act::Bool = true) # NOTE there is another function by the same name in convDual. Should reconsider dispatch
+function get_bounds_interval(nnet::Network, input::Hyperrectangle, act::Bool = true) # NOTE there is another function by the same name in convDual. Should reconsider dispatch
     if act
         solver = MaxSens(0.0, true)
         bounds = Vector{Hyperrectangle}(undef, length(nnet.layers) + 1)
@@ -281,7 +281,7 @@ function get_bounds(nnet::Network, input::Hyperrectangle, act::Bool = true) # NO
        error("before activation bounds not supported yet.")
     end
 end
-get_bounds(problem::Problem) = get_bounds(problem.network, problem.input)
+get_bounds_interval(problem::Problem) = get_bounds_interval(problem.network, problem.input)
 
 
 """
@@ -323,6 +323,30 @@ function get_bounds_mip(nnet::Network, input::Hyperrectangle, act::Bool = true) 
 end
 get_bounds_mip(problem::Problem) = get_bounds_mip(problem.network, problem.input)
 
+
+function get_bounds(network::Network, input::Hyperrectangle, method::Symbol)
+	if method == :interval
+		return get_bounds_interval(network, input_set)
+	elseif method == :lp
+		return get_bounds_lp(network, input_set)
+	elseif method == :mip
+		return get_bounds_mip(network, input_set)
+	else
+		throw("method $method for finding network bound is not defined.")
+	end
+end
+
+function get_bounds(problem::Problem, method::Symbol)
+	if method == :interval
+		return get_bounds_interval(problem)
+	elseif method == :lp
+		return get_bounds_lp(problem)
+	elseif method == :mip
+		return get_bounds_mip(problem)
+	else
+		throw("method $method for finding network bound is not defined.")
+	end
+end
 
 
 """
