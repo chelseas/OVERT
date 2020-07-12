@@ -24,7 +24,7 @@ read controller
 ----------------------------------------------
 """
 
-bound_method = :mip
+bound_method = :lp
 
 function find_controller_bound(network_file, input_set, last_layer_activation; bound_method=bound_method)
     network = read_nnet(network_file; last_layer_activation=last_layer_activation)
