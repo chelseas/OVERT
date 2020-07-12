@@ -8,6 +8,17 @@ init_neurons(m,     network::Network) = init_neurons(m, network.layers)
 init_deltas(m,      network::Network) = init_deltas(m,  network.layers)
 init_multipliers(m, network::Network) = init_multipliers(m, network.layers)
 
+# for lp relaxed version
+init_deltas_relaxed(m,  network::Network) = init_deltas_relaxed(m, network.layers)
+function init_deltas_relaxed(model::Model, layers::Vector{Layer})
+    deltas = init_variables(model, layers)
+    for d in deltas
+        @constraint(model, d .≤ 1)
+        @constraint(model, d .≥ 0)
+    end
+    return deltas
+end
+
 function init_variables(model::Model, layers::Vector{Layer}; binary = false, include_input = false)
     # TODO: only neurons get offset array
     vars = Vector{Vector{VariableRef}}(undef, length(layers))

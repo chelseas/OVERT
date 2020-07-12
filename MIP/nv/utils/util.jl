@@ -297,7 +297,11 @@ function get_bounds_lp(nnet::Network, input::Hyperrectangle, act::Bool = true) #
     if act
         model = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0))
         neurons = init_neurons(model, nnet)
-        deltas = init_deltas(model, nnet)
+
+        # deltas are relaxed to real-values
+        deltas = init_deltas_relaxed(model, nnet)
+
+        # we use MIP formulation, but the binary variables are relaxed to be real-valued between 0 and 1.
         bounds = encode_network_lp!(model, nnet, neurons, deltas, input, BoundedMixedIntegerLP())
         return bounds
     else
@@ -306,7 +310,18 @@ function get_bounds_lp(nnet::Network, input::Hyperrectangle, act::Bool = true) #
 end
 get_bounds_lp(problem::Problem) = get_bounds_lp(problem.network, problem.input)
 
-
+function get_bounds_mip(nnet::Network, input::Hyperrectangle, act::Bool = true) # NOTE there is another function by the same name in convDual. Should reconsider dispatch
+    if act
+        model = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0))
+        neurons = init_neurons(model, nnet)
+        deltas = init_deltas(model, nnet)
+        bounds = encode_network_lp!(model, nnet, neurons, deltas, input, BoundedMixedIntegerLP())
+        return bounds
+    else
+       error("before activation bounds not supported yet.")
+    end
+end
+get_bounds_mip(problem::Problem) = get_bounds_mip(problem.network, problem.input)
 
 
 
