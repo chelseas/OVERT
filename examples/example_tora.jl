@@ -5,9 +5,11 @@ include("../MIP/src/overt_to_mip.jl")
 include("../MIP/src/mip_utils.jl")
 include("../models/tora/tora.jl")
 
+controller = "nnet_files/jair/tora_smallest_controller.nnet"
+
 query = OvertQuery(
 	Tora,                                          # problem
-	"nnet_files/controller_complex_tora.nnet",  # network file
+	controller,  # network file
 	Id(),                                          # last layer activation layer Id()=linear, or ReLU()=relu
 	"MIP",                                         # query solver, "MIP" or "ReluPlex"
 	10,                                            # ntime

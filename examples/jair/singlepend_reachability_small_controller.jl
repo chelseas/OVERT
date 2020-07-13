@@ -19,10 +19,11 @@ query = OvertQuery(
 
 input_set = Hyperrectangle(low=[1., 0.], high=[1.2, 0.2])
 t1 = Dates.time()
-all_sets, all_sets_symbolic = symbolic_reachability_with_concretization(query, input_set, [15, 15, 10])
+all_sets = many_timestep_concretization(query, input_set)[1]
+#all_sets_symbolic = symbolic_reachability_with_concretization(query, input_set, [15, 15, 10])[2]
 t2 = Dates.time()
 dt = (t2-t1)
 print("elapsed time= $(dt) seconds")
 
-using JLD2
-JLD2.@save "examples/jair/data/single_pendulum_reachability_small_controller_data.jld2" query input_set all_sets all_sets_symbolic dt
+#using JLD2
+#JLD2.@save "examples/jair/data/single_pendulum_reachability_small_controller_data.jld2" query input_set all_sets all_sets_symbolic dt

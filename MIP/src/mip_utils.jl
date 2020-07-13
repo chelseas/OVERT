@@ -23,28 +23,80 @@ include("../nv/reachability/maxSens.jl")
 read controller
 ----------------------------------------------
 """
+tighten_type=nothing
+import Base.intersect
+function intersect(x::Hyperrectangle, y::Hyperrectangle)
+	l = max.(low(x), low(y))
+	h = min.(high(x), high(y))
+	z = Hyperrectangle(low = l, high = h)
+	return z
+end
+
+function intersect(x::Array{Hyperrectangle, 1}, y::Array{Hyperrectangle, 1})
+	@assert length(x) == length(y)
+	z = Array{Hyperrectangle, 1}(undef, length(x))
+	for i = 1:length(x)
+		z[i] = intersect(x[i], y[i])
+	end
+	return z
+end
+
+
+function tighten_bound(model, neurons)
+	new_bounds = Array{Hyperrectangle}(undef, length(neurons))
+	# new_bounds = Vector{Hyperrectangle}(undef, length(neurons))
+    for i in 1:length(neurons)
+        lower = Array{Float64}(undef, length(neurons[i]))
+        upper = Array{Float64}(undef, length(neurons[i]))
+        for j in 1:length(neurons[i])
+            neuron = neurons[i][j]
+            @objective(model, Min, neuron)
+            JuMP.optimize!(model)
+            termination_status(model) == MOI.OPTIMAL || throw("bounding did not work")
+            lower[j] = value(neuron)
+            @objective(model, Max, neuron)
+            JuMP.optimize!(model)
+			termination_status(model) == MOI.OPTIMAL || throw("bounding did not work")
+            upper[j] = value(neuron)
+        end
+        new_bounds[i] = Hyperrectangle(low = lower, high = upper)
+    end
+	return new_bounds
+end
+
+function find_controller_bound(network_nnet_address, input_set, last_layer_activation; tighten_type=:nothing)
+	network = read_nnet(network_nnet_address, last_layer_activation=last_layer_activation)
+	model = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0))
+	bounds = get_bounds(network, input_set)
+	isnothing(tighten_type) && return bounds
+	neurons = init_neurons(model, network)
+	if tighten_type == :lp
+		deltas = init_multipliers(model, network)
+		for delta in deltas
+			@constraint(model, delta .≤ 1)
+			@constraint(model, delta .≥ 0)
+		end
+	elseif tighten_type == :mip
+		deltas = init_deltas(model, network)
+	else
+		throw("tighten type $tighten_type is not recognized.")
+	end
+	encode_network!(model, network, neurons, deltas, bounds, BoundedMixedIntegerLP())
+	new_bounds = tighten_bound(model, neurons)
+	final_bounds = intersect(bounds, new_bounds)
+	return final_bounds
+end
 
 function add_controller_constraints(model, network_nnet_address, input_set, input_vars, output_vars; last_layer_activation=Id())
     network = read_nnet(network_nnet_address, last_layer_activation=last_layer_activation)
     neurons = init_neurons(model, network)
     deltas = init_deltas(model, network)
-    # bounds = get_bounds(network, input_set)
-	bounds = get_bounds_lp(network, input_set)
+    bounds = find_controller_bound(network_nnet_address, input_set, last_layer_activation; tighten_type=tighten_type)
     encode_network!(model, network, neurons, deltas, bounds, BoundedMixedIntegerLP())
-	# bounds = [bounds]
-	# bounds = encode_network_lp!(model, network, neurons, deltas, input_set, BoundedMixedIntegerLP())
-    @constraint(model, input_vars .== neurons[1])  # set inputvars
+	@constraint(model, input_vars .== neurons[1])  # set inputvars
     @constraint(model, output_vars .== neurons[end])  # set outputvars
-    return bounds[end]
+    return bounds
 end
-
-function find_controller_bound(network_file, input_set, last_layer_activation)
-    network = read_nnet(network_file; last_layer_activation=last_layer_activation)
-    #bounds = get_bounds(network, input_set)
-	bounds = get_bounds_lp(network, input_set)
-    return bounds[end]
-end
-
 
 """
 ----------------------------------------------
@@ -94,7 +146,7 @@ function setup_overt_and_controller_constraints(query::OvertQuery, input_set::Hy
     end
 
     # read controller and add bounds to range dictionary
-    cntr_bound = find_controller_bound(network_file, input_set, last_layer_activation)
+    cntr_bound = find_controller_bound(network_file, input_set, last_layer_activation; tighten_type=tighten_type)[end]
     for i = 1:length(control_vars)
 		range_dict[control_vars[i]] = [cntr_bound.center[i] - cntr_bound.radius[i],
                                      cntr_bound.center[i] + cntr_bound.radius[i]]
@@ -365,7 +417,10 @@ function symbolic_reachability(query::OvertQuery, input_set::Hyperrectangle)
 	match_io!(mip_model, query, all_oA_vars)
 
 	# optimize for the output of timestep ntime.
+	t1 = Dates.time()
 	set_symbolic = solve_for_reachability(mip_model, query, all_oA_vars[end], query.ntime)
+	t2 = Dates.time()
+	println("symbolic computation is $(t2-t1) seconds.")
 	return all_sets, set_symbolic
 end
 
