@@ -23,7 +23,7 @@ include("../nv/reachability/maxSens.jl")
 read controller
 ----------------------------------------------
 """
-tighten_type=nothing
+tighten_type=:mip
 import Base.intersect
 function intersect(x::Hyperrectangle, y::Hyperrectangle)
 	l = max.(low(x), low(y))

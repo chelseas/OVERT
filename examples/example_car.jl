@@ -3,24 +3,23 @@ include("../OverApprox/src/overapprox_nd_relational.jl")
 include("../OverApprox/src/overt_parser.jl")
 include("../MIP/src/overt_to_mip.jl")
 include("../MIP/src/mip_utils.jl")
-include("../models/car/car.jl")
+include("../models/car/simple_car.jl")
+
+network = "nnet_files/jair/car_smallest_controller.nnet"
 
 query = OvertQuery(
-	Car,                                         # problem
-	"nnet_files/controller_complex_car.nnet", # network file
-	Id(),                                        # last layer activation layer Id()=linear, or ReLU()=relu
-	"MIP",                                       # query solver, "MIP" or "ReluPlex"
-	3,                                          # ntime
-	0.1,                                         # dt
-	1,                                          # N_overt
+	SimpleCar,  # problem
+	network,    # network file
+	Id(),      	# last layer activation layer Id()=linear, or ReLU()=relu
+	"MIP",     	# query solver, "MIP" or "ReluPlex"
+	25,        	# ntime
+	0.2,       	# dt
+	-1,        	# N_overt
 	)
 
-input_set = Hyperrectangle(low=[1., 1., 1., 1.], high=[2., 2., 2., 2.])
-all_sets,  all_oA, all_oA_vars = many_timestep_concretization(query, input_set)
-SATus, vals, stats = symbolic_satisfiability(query, input_set)
-#all_sets, all_sets_symbolic = symbolic_bound(query, input_set)
-# output_sets, xvec = monte_carlo_simulate(query, input_set)
-
-# fig = plot_output_sets(all_sets)
-# #fig = plot_output_sets([all_sets_symbolic]; linecolor=:red, fig=fig)
-# fig = plot_output_hist(xvec, query.ntime; fig=fig, nbins=100)
+input_set = Hyperrectangle(low=[9.5, -4.5, 2.1, 1.5], high=[9.55, -4.45, 2.11, 1.51])
+target_set = InfiniteHyperrectangle([-Inf, -Inf, -Inf, -Inf], [5.0, Inf, Inf, Inf])
+t1 = Dates.time()
+SATus, vals, stats = symbolic_satisfiability(query, input_set, target_set)
+t2 = Dates.time()
+dt = (t2-t1)

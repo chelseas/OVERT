@@ -18,8 +18,8 @@ query = OvertQuery(
 	)
 
 input_set = Hyperrectangle(low=[1., 0.], high=[1.2, 0.2])
-t1 = Dates.time()
 all_sets = many_timestep_concretization(query, input_set)[1]
+t1 = Dates.time()
 #all_sets_symbolic = symbolic_reachability_with_concretization(query, input_set, [15, 15, 10])[2]
 t2 = Dates.time()
 dt = (t2-t1)

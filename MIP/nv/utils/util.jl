@@ -260,8 +260,8 @@ function interval_map(W::Matrix{N}, l::AbstractVecOrMat, u::AbstractVecOrMat) wh
 end
 
 """
-    get_bounds(problem::Problem)
-    get_bounds(nnet::Network, input::Hyperrectangle)
+    get_bounds_interval(problem::Problem)
+    get_bounds_interval(nnet::Network, input::Hyperrectangle)
 
 This function calls maxSens to compute node-wise bounds given a input set.
 
@@ -293,21 +293,60 @@ This function use lp relaxation to compute node-wise bounds given a input set.
 Return:
 - `Vector{Hyperrectangle}`: bounds for all nodes **after** activation. `bounds[1]` is the input set.
 """
-function get_bounds_lp(nnet::Network, input::Hyperrectangle, act::Bool = true) # NOTE there is another function by the same name in convDual. Should reconsider dispatch
-    if act
-        model = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0))
-        neurons = init_neurons(model, nnet)
-        deltas = init_deltas(model, nnet)
-        bounds = encode_network_lp!(model, nnet, neurons, deltas, input, BoundedMixedIntegerLP())
-        return bounds
-    else
-       error("before activation bounds not supported yet.")
-    end
-end
-get_bounds_lp(problem::Problem) = get_bounds_lp(problem.network, problem.input)
-
-
-
+# function get_bounds_lp(nnet::Network, input::Hyperrectangle, act::Bool = true) # NOTE there is another function by the same name in convDual. Should reconsider dispatch
+#     if act
+#         model = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0))
+#         neurons = init_neurons(model, nnet)
+#
+#         # deltas are relaxed to real-values
+#         deltas = init_deltas_relaxed(model, nnet)
+#
+#         # we use MIP formulation, but the binary variables are relaxed to be real-valued between 0 and 1.
+#         bounds = encode_network_lp!(model, nnet, neurons, deltas, input, BoundedMixedIntegerLP())
+#         return bounds
+#     else
+#        error("before activation bounds not supported yet.")
+#     end
+# end
+# get_bounds_lp(problem::Problem) = get_bounds_lp(problem.network, problem.input)
+#
+# function get_bounds_mip(nnet::Network, input::Hyperrectangle, act::Bool = true) # NOTE there is another function by the same name in convDual. Should reconsider dispatch
+#     if act
+#         model = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0))
+#         neurons = init_neurons(model, nnet)
+#         deltas = init_deltas(model, nnet)
+#         bounds = encode_network_lp!(model, nnet, neurons, deltas, input, BoundedMixedIntegerLP())
+#         return bounds
+#     else
+#        error("before activation bounds not supported yet.")
+#     end
+# end
+# get_bounds_mip(problem::Problem) = get_bounds_mip(problem.network, problem.input)
+#
+#
+# function get_bounds(network::Network, input::Hyperrectangle, method::Symbol)
+# 	if method == :interval
+# 		return get_bounds_interval(network, input_set)
+# 	elseif method == :lp
+# 		return get_bounds_lp(network, input_set)
+# 	elseif method == :mip
+# 		return get_bounds_mip(network, input_set)
+# 	else
+# 		throw("method $method for finding network bound is not defined.")
+# 	end
+# end
+#
+# function get_bounds(problem::Problem, method::Symbol)
+# 	if method == :interval
+# 		return get_bounds_interval(problem)
+# 	elseif method == :lp
+# 		return get_bounds_lp(problem)
+# 	elseif method == :mip
+# 		return get_bounds_mip(problem)
+# 	else
+# 		throw("method $method for finding network bound is not defined.")
+# 	end
+# end
 
 
 """
