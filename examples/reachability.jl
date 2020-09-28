@@ -5,7 +5,7 @@ include("../MIP/src/overt_to_mip.jl")
 include("../MIP/src/mip_utils.jl")
 include("../models/single_pendulum/single_pend.jl")
 
-controller = "single_pendulum_controller.nnet"
+controller = "examples/single_pendulum_controller.nnet"
 
 query = OvertQuery(
 	SinglePendulum,    # problem
