@@ -5,7 +5,7 @@ include("../MIP/src/overt_to_mip.jl")
 include("../MIP/src/mip_utils.jl")
 include("../models/car/simple_car.jl")
 
-network = "nnet_files/jair/car_smallest_controller.nnet"
+network = "car_controller.nnet"
 
 query = OvertQuery(
 	SimpleCar,  # problem
