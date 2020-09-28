@@ -1,8 +1,6 @@
-using SymEngine
-using MacroTools
-import MacroTools.postwalk
+# utilities for overapprox_nd_relational.jl and overest_nd.jl
 
-# opeartions and functions that are supported in overapproax_nd.jl
+# opeartions and functions that are supported in overest_nd.jl
 special_oper = [:+, :-, :/, :*, :^]
 special_func = [:exp, :log, :log10,
                 :sin, :cos, :tan,
@@ -14,22 +12,6 @@ increasing_special_func = [:exp, :log, :log10,
                          :tan, :sinh, :tanh,
                          :asin, :atan,
                          :asinh, :atanh, :acosh]
-
-N_VARS = 0 # number of variables defined so far; has to be defined globally.
-
-"""
-This function returns symbolic variable with proper numbering.
-    The counter has to be a global variable.
-TODO: remove input; it is not used.
-"""
-add_var() = add_var(1.)
-
-function add_var(bound)
-    global N_VARS
-    N_VARS += 1
-    return Symbol("v_$N_VARS")
-end
-
 
 function to_pairs(B)
     """
@@ -320,6 +302,30 @@ function substitute!(expr::Expr, old_list::Vector{Any}, new_list::Array{Any})
     return expr
 end
 
+# function reduce_args_to_2!(expr)
+
+#     """
+#     if expr has operations with more than two arguments, this function reduces the arguments to 2
+#         Example: reduce_args_to_2!(:(x+y+z)) = (:(x+y)+z))
+#                  reduce_args_to_2!(:sin(x*y*z)) = (:(sin((x*y)*z))
+#     Modifies expression in place and returns expr as well.
+#     """
+#     func = expr.args[1]
+#     args = expr.args[2:end]
+#     larg = length(args)
+#     if larg > 2
+#         for i=1:div(larg,2)
+#            expr.args[i+1] = Expr(:call, func, args[2*i-1], args[2*i])
+#         end
+#         if isodd(larg)
+#             expr.args[div(larg,2)+2] = expr.args[end]
+#             expr.args = expr.args[1:div(larg,2)+2]
+#         else
+#             expr.args = expr.args[1:div(larg,2)+1]
+#         end
+#     end
+#     return expr
+# end
 
 ∉(e, set) = !(e ∈ set)
 
@@ -364,6 +370,20 @@ function reduce_args_to_2(expr::Expr)
     return reduce_args_to_2(f::Symbol, arguments::Array)
 end
 
+# function get_rid_of_division(x)
+#     if (x isa Expr) && (x.args[1] == :/) && !is_number(x.args[2])
+#         # all moved to division case in binary functions
+#         println("*"^30)
+#         println("division is $x")
+#         println("*"^30)
+#         inv_denom = Expr(:call, :/, 1., x.args[3])
+#         println("turned to $(Expr(:call, :*, x.args[2], inv_denom))")
+#         return Expr(:call, :*, x.args[2], inv_denom)
+#     else
+#         return x
+#     end
+# end
+
 function is_number(expr)
     try
         eval(expr)
@@ -398,71 +418,4 @@ is_binary(expr::Expr) = length(expr.args) == 3
 function multiply_interval(range, constant)
     S = [range[1]*constant, range[2]*constant]
     return [min(S...), max(S...)]
-end
-
-simplify(ex::Expr) = postwalk(e -> _simplify(e), ex)
-_simplify(s) = s
-_simplify(e::Expr) = Meta.parse(string(expand(Basic(e))))
-
-"""
-Construct a symbolic expression for a line between the points (x₀, 1.0) on the left and (x₁, 0) on the right.
-`pos_unit` has positive slope while `neg_unit` has negative slope. Note that due to the left-to-right assumption
-
-    neg_unit(x₀, x₁) == pos_unit(x₁, x₀)
-"""
-neg_unit(x0, x1) = :($(1/(x0-x1)) * (x - $x1))
-"""
-Construct a symbolic expression for a line between the points (x₀, 0.0) on the left and (x₁, 1.0) on the right.
-`pos_unit` has positive slope while `neg_unit` has negative slope. Note that due to the left-to-right assumption
-
-    neg_unit(x₀, x₁) == pos_unit(x₁, x₀)
-"""
-pos_unit(x0, x1) = :($(1/(x1-x0)) * (x - $x0))
-
-"""
-    closed_form_piecewise_linear(pts)::Expr
-
-Constructs a closed-form piecewise linear expression from an ordered (left to right) sequence of points.
-The method is inspired by the paper by Lum and Chua (cite) that considers a piecewise linear function of the form:
-`f(x) = Σᵢ(yᵢ⋅gᵢ(xᵢ))` where `gᵢ(xⱼ) = δᵢⱼ`
-Here in the 1D case, `gᵢ = max(0, yᵢ*min(L1, L2))`, where `L1` and `L2` are the lines "ramping up" towards xᵢ
-and "ramping down" away from xᵢ. The function returns an `Expr` based on a variable `x`.
-This can be turned into a callable function `f` by running something like `eval(:(f(x) = \$expression_of_x))`.
-
-# Example
-    julia> pts = [(0,0), (1,1), (2, 0)]
-    3-element Array{Tuple{Int64,Int64},1}:
-     (0, 0)
-     (1, 1)
-     (2, 0)
-
-    julia> closed_form_piecewise_linear(pts)
-    :(max(0, 0 * (-1.0 * (x - 1))) + max(0, 1 * min(1.0 * (x - 0), -1.0 * (x - 2))) + max(0, 0 * (1.0 * (x - 1))))
-"""
-function closed_form_piecewise_linear(pts)
-    n = length(pts)
-    x, y = first.(pts), last.(pts) # split the x and y coordinates
-    G = []
-    for i in 2:n-1
-        x0, x1, x2 = x[i-1:i+1] # consider the "triangulation" of points x0,x1,x2
-        L1 = pos_unit(x0, x1) # x0-x1 is an increasing linear unit
-        L2 = neg_unit(x1, x2) # x1-x2 is a decreasing linear unit
-        gᵢ = :($(y[i]) * max(0, min($L1, $L2)))
-        push!(G, gᵢ)
-    end
-    # first and last points are special cases that ignore the min
-    g₀ = :($(y[1]) * max(0, $(neg_unit(x[1], x[2]))))
-    gᵣ = :($(y[end]) * max(0, $(pos_unit(x[end-1], x[end]))))
-    # Order doesn't matter now but for our debugging purposes earlier we enforce sequential ordering.
-    pushfirst!(G, g₀)
-    push!(G, gᵣ)
-    return :(+$(G...))
-end
-
-
-function get_symbols(ex::Union{Expr, Symbol})
-    syms = Symbol[]
-    ops = (:*, :+, :-, :relu)
-    postwalk(e -> e isa Symbol && e ∉ ops ? push!(syms, e) : nothing, ex)
-    unique(syms)
 end
